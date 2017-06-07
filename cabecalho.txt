@@ -1,0 +1,33 @@
+Estrutura do arquivo vmx: Constitui de cabeçalho e corpo
+
+Corpo do arquivo vmx
+
+São 5 colunas ao todo:
+
+"Bytes": Dados a serem propriamente passados para a máquina virtual, estão representados em hexadecimal. Possue tamanho de 2 caracteres
+
+Após "bytes" há uma separação com o caractere pipe ('|') que separa essa coluna das demais colunas do arquivo.
+
+"numero da linha": um contador das sequencias de lnhas indo do zero até a ultima linha.
+
+terceira e quarta coluna são desconhecidas.
+
+
+Cabeçalho do arquivo vmx
+
+São 9 itens ao todo, separados por espaço que são usados para auxiliar na configuração dos blocos de códigos a serem envados para os motes.
+Aparecem na segunte ordem:
+
+startProg: informa onde o código irá começar, o numero representa o número da linha na segunda. a partir dessa linha o programa comeca a recolher os bytes
+
+endProg: representa o limite de linhas na segunda coluna até onde o código será copiado
+
+nTracks: 				
+wClocks:
+asyncs: 
+wClock0:
+gate0: 
+inEvts: 
+async0: 
+
+Exemplo: 90 245 2 1 0 0 8 3 8

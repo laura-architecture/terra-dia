@@ -1,0 +1,167 @@
+ /*
+	TerraNet: Simple routing protocol
+	Author: A.Branco (abranco at inf.puc-rio.br)
+	Date: March,2017
+
+	Description:
+		This Terra script implements a simple adaptive protocol to gather sensor data.
+		The routing strategy is based on fixed nodes identifier arranged in sequence.
+
+	Assumptions:
+		1) Nodes are arranged in sequence from x0 to x9, where x may be 1..9.
+		2) The base station node is the x0 node.
+		3) The temperature and Photo sensor are sent in different messages.
+		4) The readings and sendings are asynchronous.
+		5) The reading periods are adjustable idependently.
+		6) The node parent is the previous node in sequence.
+		7) If a node fails, the routing up to this node will fail.
+		8) All readings and sendings has different delay to avoid radio collisions.
+		9) The protocol try to resend failed messages in best effort.
+		10) The retry strategy may g	Description:
+		This script implements a simple adaptive protocol to gather sensor data.
+		The routing strategy is based on fixed nodes identifier arranged in sequence.enerate duplicate messages.
+		11) The message sequence id may be used to identify duplicate messages.
+		12) To run in the Terra simulator, the constant TOSSIM must be 'TRUE'.
+
+	obs:
+		a) During dissemination of new script, the older script stops running.
+
+
+	DataMsg definition
+		- 		-> Type/Id
+		- 		-> Source node
+		- 		-> Target Node
+		- d8[0] -> Reading Sequence
+		- d8[1] ->
+		- d8[2] -> Send retries by sequence
+		- d8[3] ->
+		- d16[0]-> Sensor Value (Temp/Photo)
+		- d16[1]->
+		- d16[2]->
+		- d16[3]-> source node id
+		- d32[0]->
+		- d32[1]->
+
+*/
+
+#include "TerraNet.defs"
+
+// Constants to define the reading period in seconds
+#define TEMP_PERIOD 5
+#define PHOTO_PERIOD 8
+
+#define TOSSIM FALSE  // TRUE: running on Terra TOSSIM, FALSE: running in real nodes
+
+// Constants to define message type/id
+#define TEMP_DATA 1
+#define PHOTO_DATA 2
+
+// Get nodeId and set RF Power
+var ushort nodeId = getNodeId();
+setRFPower(7);
+
+// Calculates bsId assuming maximun of 9 nodes and the bsIs is x0
+var ushort bsId = (nodeId/10)*10;
+// Calculates parentId assuming nodes in sequence 33->32->31->30
+var ushort parent = nodeId-1;
+if TOSSIM and nodeId==11 then parent = 1; end
+
+// DataMsg definition
+pktype usrMsg from radioMsg with
+	var ubyte[4]  d8;
+	var ushort[4] d16;
+	var ulong[2]  d32;
+end
+
+var usrMsg tempMsg;
+tempMsg.source = nodeId;
+tempMsg.d8[0]  = 0;
+tempMsg.d16[3] = nodeId;
+var usrMsg photoMsg;
+photoMsg.source = nodeId;
+photoMsg.d8[0]  = 0;
+photoMsg.d16[3] = nodeId;
+
+// Sending/forward buffer
+var usrMsg recMsg;
+var usrMsg qMsg;
+var ubyte ack;
+
+// Sequence counters
+var ubyte tempSeq=0;
+var ubyte photoSeq=0;
+
+// linha inserida após teste do Adriano 30/03/2017
+qClear();
+
+par do
+/***********************************
+ * Sensor read and  data enqueue
+ ***********************************/
+	par do
+		await (nodeId*100)ms;
+		loop do
+			par/and do
+				emit REQ_TEMP;
+				tempMsg.d16[0] = await TEMP;
+				inc tempSeq;
+				tempMsg.d8[0] = tempSeq;
+				tempMsg.d8[2] = 0; // retries
+				tempMsg.type = TEMP_DATA;
+				qPut(tempMsg);
+			with
+				await (TEMP_PERIOD)s;
+			end
+		end
+	with
+		await ((nodeId*100)+50)ms;
+		loop do
+			par/and do
+				emit REQ_PHOTO;
+				photoMsg.d16[0] = await PHOTO;
+				inc photoSeq;
+				photoMsg.d8[0] = photoSeq;
+				photoMsg.d8[2] = 0; // retries
+				photoMsg.type = PHOTO_DATA;
+				qPut(photoMsg);
+			with
+				await (PHOTO_PERIOD)s;
+			end
+		end
+	end
+/***********************************
+ * Forwarding a message
+ ***********************************/
+with
+	loop do
+		recMsg = await RECEIVE;
+		qPut(recMsg);
+	end
+/***********************************
+ * Sends queued messages, one at time.
+ ***********************************/
+with
+	loop do
+		await Q_READY;
+		loop do
+			if qSize() >0 then
+				qGet(qMsg);
+				qMsg.target = parent;
+				emit SEND_ACK(qMsg);
+				loop do
+					ack = await SEND_DONE_ACK;
+					if ack  then
+						break;
+					else
+						inc qMsg.d8[2];
+						if qMsg.d8[2] > 6 then break; end
+						await 1s;
+						emit SEND_ACK(qMsg);
+					end
+				end
+			else
+				break;
+			end
+		end
+	end
+end
