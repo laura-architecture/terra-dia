@@ -61,10 +61,10 @@ while not(exit) do
         print ('Tentando conectar');
         mote = tossam.connect
         {
-					protocol = "network",
-					host     = host,
-					port     = port,
-					nodeid   = nodeid
+					protocol = "sf",
+	        host     = "192.168.2.128",
+	        port     = port,
+	        nodeid   = nodeid
         }
         if mote then
 
